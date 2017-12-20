@@ -69,7 +69,7 @@
 #ifndef DOXYGEN_SKIP_DOC
 // Fortran subroutine to calcualte f(t,y) for the aqueous-phase chemical mechanism
 void aq_integrate_f(int n_eqn_c, double curr_time_c, double *state_c_p,
-                    double *f_c_p, void *sysdata_c_p);
+                    double *f_c_p, void *sysdata_c_p, void *temp_rates_c_p);
 
 // Fortran subroutine to calculate J(t,y) = df/dy for the aqueous-phase chemical mechanism
 void aq_integrate_jac(int n_eqn_c, double curr_time_c, double *state_c_p,
@@ -296,7 +296,7 @@ static int f(realtype t, N_Vector y, N_Vector ydot, void *user_data)
     f     = (double*) NV_DATA_S(ydot);
     
     // Call fortran f(t,y) function
-    aq_integrate_f(n_eqn, (double) t, state, f, user_data);
+    aq_integrate_f(n_eqn, (double) t, state, f, user_data, NULL);
     
     return(0);
 }

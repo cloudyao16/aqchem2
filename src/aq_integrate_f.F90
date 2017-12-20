@@ -108,7 +108,7 @@ contains
 
   !> Do aq. phase chemistry and phase transfer over a given time interval
   subroutine aq_integrate(aq_state, aq_mech_data, aq_spec_data, env_state_initial, &
-       env_state_final, del_t)
+       env_state_final, del_t,do_print)
 
     !> Aq. Phase Species State
     type(aq_state_t), intent(inout) :: aq_state
@@ -122,6 +122,9 @@ contains
     type(env_state_t), intent(in) :: env_state_final
     !> Total time to integrate.
     real(kind=dp), intent(in) :: del_t
+    ! print derivatives
+    logical, intent(in) :: do_print
+
 
     ! single variable to reference system data in ODE solver
     type(aq_integrate_data_t),target :: aq_integrate_data
@@ -142,6 +145,11 @@ contains
     real(kind=c_double) :: t_final_c
     ! Pointer to system data
     type(c_ptr) :: sysdata_c_p
+
+    !Tempoerary pointer f(y,t) for output, 8 Dec
+    real(kind=dp), allocatable, target :: temp_f(:)
+    !Temporary rates for reaction, 8 Dec
+    real(kind=dp), allocatable, target :: temp_rates(:)
 
     ! Mixing ratio vector
     real(kind=c_double), target :: state_c(aq_spec_data%n_spec)
@@ -175,6 +183,18 @@ contains
     t_initial_c = real(0, c_double)
     t_final_c   = real(del_t, c_double)
     sysdata_c_p = c_loc(aq_integrate_data)
+
+    if (do_print) then
+       allocate(temp_f(aq_spec_data%n_spec)) ! Dec 8, by Matt
+       allocate(temp_rates(aq_mech_data%n_rxn)) ! Dec 8, by Matt
+       temp_f(:) = 0.0d0
+       call aq_integrate_f(neq_c, t_initial_c, state_c_p, c_loc(temp_f), &
+            sysdata_c_p, c_loc(temp_rates))
+       write(*,*) "time step", t_initial_c
+       write(*,*) temp_f ! Array of derivatives number of the species
+       deallocate(temp_f)
+       deallocate(temp_rates)
+    endif 
 
     ! Call c ODE solver function
     solver_stat = aq_integrate_solver(neq_c, state_c_p, abstol_c_p, reltol_c, &
@@ -280,9 +300,10 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Calcualte f(t,y) for the aqueous-phase chemical mechanism
+  !> Calcualte f(t,y) for the aqueous-phase chemical mechanism, editted by Mat,
+  ! Dec 8 2017
   subroutine aq_integrate_f(n_eqn_c, curr_time_c, state_c_p, f_c_p, &
-                              sysdata_c_p) bind(c)
+                              sysdata_c_p, temp_rates_c_p) bind(c)
 
     use iso_c_binding
 
@@ -296,6 +317,9 @@ contains
     type(c_ptr), intent(in), value :: f_c_p
     !> pointer to system data in an aq_integrate_t variable
     type(c_ptr), intent(in), value :: sysdata_c_p
+    ! Temporary rate array, edit by Matt,8 Dec
+    type(c_ptr), intent(in), value :: temp_rates_c_p
+
 
     ! Equivalent fortran variables
     ! number of equations (i.e. species)
@@ -308,6 +332,8 @@ contains
     real(kind=dp), pointer :: f_p(:)
     ! pointer to system data in an aq_integrate_t variable
     type(aq_integrate_data_t), pointer :: sysdata_p
+    ! Temporary rate array
+    real(kind=dp), pointer :: temp_rates(:)
 
     ! forward and backward rate constants
     real(kind=dp) :: rc_forward, rc_backward
@@ -328,6 +354,7 @@ contains
     call c_f_pointer(state_c_p, state_p, (/ n_eqn /))
     call c_f_pointer(f_c_p, f_p, (/ n_eqn /))
     call c_f_pointer(sysdata_c_p, sysdata_p)
+    call c_f_pointer(temp_rates_c_p, temp_rates, (/ sysdata_p%aq_mech_data%n_rxn /))
 
     ! Reset f(t,y)
     f_p(:) = 0.0
@@ -354,6 +381,19 @@ contains
                          trim(integer_to_string(i)))
         endif
 
+        ! Added by yuyao, Sep 6, 2017
+        ! write(*,*) sysdata_p%aq_mech_data%n_rxn
+        ! write(*,*) rc_forward
+         
+        !if (rc_forward .eq. (7.2e7*exp(-4000*(1.0/curr_temp - 1.0/298.0)))) then  
+           !open  (1, file="HSO3m+O3.txt", status="new")
+        !   write (*,*) 'HSO3m  + aH2O2', curr_time, ret_val
+           !close (1)
+        !else if (rc_forward .eq. (3.7e5*exp(-5530*(1.0/curr_temp - 1.0/298.0)))) then  
+        !   write (*,*) 'HSO3m  + aO3', ret_val
+        !else if (rc_forward .eq. (1.5e9*exp(-52800*(1.0/curr_temp - 1.0/298.0)))) then  
+        !   write (*,*) 'SO3mm  + aO3', ret_val
+        !endif
         ! Calculate the forward rate for rxn i
         forward_rate = rc_forward
         do j=1, size(sysdata_p%aq_mech_data%rxn(i)%reactant)
@@ -393,6 +433,11 @@ contains
                     - backward_rate
             endif
         enddo
+
+        ! set temp rate  values, edit by Matt, 8 Dec
+        if (associated(temp_rates)) then
+            temp_rates(i) = forward_rate - backward_rate
+        endif
 
     enddo
 

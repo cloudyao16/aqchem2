@@ -24,7 +24,7 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  !> Run aqueous chemistry mechanism over timestep del_t
+  !> Run aqueous chemistry mechanism over timestep del_t, edited by Matt, Dec 8 2017
   subroutine aq_chem_timestep(env_state_initial, env_state_final, aq_mech_data, &
         aq_spec_data, aq_state, aq_state_init, gas_data, gas_state, aero_data, &
         aero_state, del_t)
@@ -57,6 +57,7 @@ contains
     ! current sub time step
     integer :: i_time
 
+    logical :: do_print ! Dec 8 2017, edited by Matt
     integer :: gly_idx, form_idx
 
     ! Water must be a species to do aqueous chemistry
@@ -109,9 +110,10 @@ contains
                                 aero_state%apa%particle(part_index)) / 1d6 ! (#/cc)
         aq_state%radius = aero_particle_radius(aero_state%apa%particle(part_index)) ! (m)
 
-        ! Solve aqueous chemistry mechanism
+        ! Solve aqueous chemistry mechanis
+        do_print = part_index.eq.1 ! Dec 8, edited by Matt
         call aq_integrate(aq_state, aq_mech_data, aq_spec_data, env_state_initial, &
-            env_state_final, del_t)
+            env_state_final, del_t, do_print)
 
         ! Map aqueous chemistry species back to PMC aerosol-phase species
         call aq_chem_aero_spec_to_PMC(aq_spec_data, aq_state, aero_data, &
@@ -225,7 +227,8 @@ contains
         if (aq_state%mix_rat(i) .lt. 0.0) then
             if (aq_state%mix_rat(i) .lt. -(aq_spec_data%abstol(i))) then
                 write(*,*) "Warning: Negative concentration for ", &
-                    aq_spec_data%name(i), " = ", aq_state%mix_rat(i), " M"
+                    aq_spec_data%name(i), " = ", aq_state%mix_rat(i), " M",&
+                    aq_spec_data%abstol(i)
             endif
             aq_state%mix_rat(i) = 0.0
         endif
@@ -240,12 +243,4 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 end module pmc_aq_chem
-
-
-
-
-
-
-
-
 

@@ -38,6 +38,8 @@ program test_aq
     type(env_state_t) :: env_state_final
     !> Integration time (s)
     real(kind=dp) :: del_t
+    !> print logical added on 5 Dec 2017 
+    logical :: do_print
 
     character(len=1000) :: temp_str
 
@@ -115,8 +117,9 @@ program test_aq
     write(*,*) "Before Integration"
     call pmc_aq_state_print(aq_state, aq_spec_data)
 
+    do_print = .TRUE. ! Edit on Dec 5, 2017
     call aq_integrate(aq_state, aq_mech_data, aq_spec_data, env_state_initial, &
-            env_state_final, del_t)
+            env_state_final, del_t, do_print) ! Edit on Dec 5, 2017
 
     !> Print final species concentrations
     write(*,*) " "
